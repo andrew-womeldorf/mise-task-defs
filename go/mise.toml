@@ -1,0 +1,78 @@
+[tools]
+"aqua:sqlc-dev/sqlc" = "latest"
+go = "latest"
+"go:golang.org/x/tools/cmd/goimports" = "latest"
+golangci-lint = "latest"
+zig = "latest"
+
+[vars]
+data_dir = "data"
+entrypoint = "./cmd/cli"
+output_file = "./data/cli"
+repo = "github.com/andrew-womeldorf/mise-task-defs/go"
+srcs_go = "**/*.go"
+srcs_sql = "sql/**/*.sql"
+
+[tasks."sql:gen"]
+description = "generate go from sql"
+run = "sqlc generate --file sql/sqlc.yaml"
+sources = ["sql/sqlc.yaml", "{{vars.srcs_sql}}"]
+outputs = {auto = true}
+
+[tasks."go:mod:download"]
+description = "downloads go deps and cleans go.mod"
+run = "go mod download"
+depends = ["sql:gen"]
+wait_for = ["go:mod"]
+
+[tasks."go:mod"]
+description = "downloads go deps and cleans go.mod"
+run = [
+    "go mod tidy",
+    "touch go.sum", # ensure go.sum "newer" than go.mod
+]
+sources = ["go.mod"]
+outputs = ["go.sum"]
+depends = ["sql:gen"]
+
+[tasks."go:build:static"]
+env.CGO_ENABLED = 1
+env.GOOS = "linux"
+env.GOARCH = "amd64"
+env.CC = "zig cc -target x86_64-linux"
+env.CXX = "zig c++ -target x86_64-linux"
+env.CI_COMMIT_REF = "{{get_env(name='CI_COMMIT_REF', default='HEAD')}}"
+env.BUILD_VERSION = "{{get_env(name='BUILD_VERSION', default='local')}}"
+description = "static build the app with extra buildinfo tags"
+run = "go build --tags extended -ldflags \"-w -s -X '{{vars.repo}}/internal/buildinfo.Version=${BUILD_VERSION}' -X '{{vars.repo}}/internal/buildinfo.Commit=${CI_COMMIT_REF}' -X '{{vars.repo}}/internal/buildinfo.Date={{now()}}'\" -o {{vars.output_file}} {{vars.entrypoint}}"
+sources = [
+    "{{vars.srcs_go}}",
+    "{{vars.srcs_sql}}",
+]
+outputs = ["{{vars.output_file}}"]
+depends = ["sql:gen"]
+wait_for = ["go:mod:download", "go:lint", "go:test"]
+
+[tasks."go:test"]
+description = "run go tests"
+run = "go test ./..."
+sources = ["{{vars.srcs_go}}", "{{vars.srcs_sql}}"]
+depends = ["go:mod", "sql:gen"]
+wait_for = ["go:mod:download", "go:lint"]
+
+[tasks."go:lint"]
+description = "run go linters"
+run = "golangci-lint run --fix={{flag(name='fix')}}"
+sources = ["{{vars.srcs_go}}", "{{vars.srcs_sql}}"]
+depends = ["go:mod", "sql:gen"]
+wait_for = ["go:mod:download"]
+
+[tasks."go:run"]
+description = "run cli"
+run = "go run {{vars.entrypoint}}"
+sources = [
+    "{{vars.srcs_go}}",
+    "{{vars.srcs_sql}}",
+]
+depends = ["sql:gen"]
+wait_for = ["go:mod:download"]
