@@ -1,0 +1,22 @@
+[settings]
+python.uv_venv_auto = true
+
+[tools]
+node = "latest" # for pyright
+uv = "latest"
+
+[tasks."py:check:lint"]
+run = [
+    "uv run ruff format --check .",
+    "uv run ruff check .",
+]
+
+[tasks."py:check:types"]
+# keep an eye on https://github.com/astral-sh/ty
+run = "pyright"
+
+[tasks."py:run"]
+run = "uv run cmd/main.py"
+
+[tasks."py:build"]
+run = "uv build"
