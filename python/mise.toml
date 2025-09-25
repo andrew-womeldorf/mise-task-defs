@@ -13,6 +13,7 @@ run = [
 
 [tasks."py:check:types"]
 # keep an eye on https://github.com/astral-sh/ty
+# Note: https://sinon.github.io/future-python-type-checkers/
 run = "pyright"
 
 [tasks."py:run"]
